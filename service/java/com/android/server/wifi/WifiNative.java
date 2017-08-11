@@ -903,6 +903,22 @@ public class WifiNative {
         doBooleanCommand("SET update_config 1");
     }
 
+    public void enableTdlsExtControl() {
+        doBooleanCommand("SET tdls_external_control 1");
+    }
+
+    public void disableScanOffload() {
+        doBooleanCommand("SET disable_scan_offload 1");
+    }
+
+    public void setP2pDisable() {
+        doBooleanCommand("SET p2p_disabled 1");
+    }
+
+    public void setPnoScanPlans() {
+        doBooleanCommand("SET sched_scan_plans 10:6 60");
+    }
+
     public boolean saveConfig() {
         return doBooleanCommand("SAVE_CONFIG");
     }
@@ -914,6 +930,14 @@ public class WifiNative {
 
     public boolean clearBlacklist() {
         return doBooleanCommand("BLACKLIST clear");
+    }
+
+    public boolean flushAllHlp() {
+        return doBooleanCommand("FILS_HLP_REQ_FLUSH");
+    }
+
+    public boolean addHlpReq(String dst, String hlpPacket) {
+        return doBooleanCommand("FILS_HLP_REQ_ADD " + dst + " " + hlpPacket);
     }
 
     public boolean setSuspendOptimizations(boolean enabled) {

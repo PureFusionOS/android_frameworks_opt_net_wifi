@@ -37,6 +37,7 @@ import android.net.wifi.ScanResult;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiConfiguration.KeyMgmt;
 import android.net.wifi.WifiConfiguration.Status;
+import android.net.wifi.WifiConfiguration.Fils;
 import android.net.wifi.WifiEnterpriseConfig;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
@@ -392,10 +393,20 @@ public class WifiConfigManager {
                 R.bool.config_wifi_fast_bss_transition_enabled);
 
         boolean hs2on = mContext.getResources().getBoolean(R.bool.config_wifi_hotspot2_enabled);
-        Log.d(Utils.hs2LogTag(getClass()), "Passpoint is " + (hs2on ? "enabled" : "disabled"));
+        boolean hs2onSet = (Settings.Global.getInt(mContext.getContentResolver(),
+                               Settings.Global.WIFI_HOTSPOT2_ENABLED, 0) == 1);
+        Log.d(Utils.hs2LogTag(getClass()), "Passpoint is " +
+                (hs2on ? "enabled" : "disabled") + ", " + hs2onSet);
 
         mConfiguredNetworks = new ConfigurationMap(userManager);
-        mMOManager = new PasspointManagementObjectManager(new File(PPS_FILE), hs2on);
+
+        if (mContext.getResources().getBoolean(
+                com.android.internal.R.bool.config_passpoint_setting_on)) {
+            mMOManager = new PasspointManagementObjectManager(new File(PPS_FILE), hs2onSet);
+        } else {
+            mMOManager = new PasspointManagementObjectManager(new File(PPS_FILE), hs2on);
+        }
+
         mEnableOsuQueries = true;
         mAnqpCache = new AnqpCache(mClock);
         mSupplicantBridgeCallbacks = new SupplicantBridgeCallbacks();
@@ -411,6 +422,23 @@ public class WifiConfigManager {
 
     public void trimANQPCache(boolean all) {
         mAnqpCache.clear(all, DBG);
+    }
+
+    public HashSet<Integer> getConfiguredChannelList() {
+    /* Hashset will avoid any duplicate frequency to be added in hashmap */
+        HashSet<Integer> freqs = new HashSet<Integer>();
+        for(WifiConfiguration config : mConfiguredNetworks.valuesForAllUsers()) {
+            if (getScanDetailCache(config) != null) {
+                for(ScanDetail scanDetail : getScanDetailCache(config).values()) {
+                    ScanResult result = scanDetail.getScanResult();
+                    freqs.add(result.frequency);
+                }
+            }
+        }
+        if (freqs.isEmpty())
+            return null;
+        else
+            return freqs;
     }
 
     void enableVerboseLogging(int verbose) {
@@ -1683,6 +1711,7 @@ public class WifiConfigManager {
 
         final Map<String, WifiConfiguration> configs = new HashMap<>();
         final SparseArray<Map<String, String>> networkExtras = new SparseArray<>();
+        mScanDetailCaches.clear();
         mLastPriority = mWifiConfigStore.loadNetworks(configs, networkExtras);
 
         readNetworkHistory(configs);
@@ -1694,7 +1723,6 @@ public class WifiConfigManager {
         // 2) mConfiguredNetworks caches a Passpoint network's FQDN the moment the network is added.
         //    Thus, we had to load the FQDNs first.
         mConfiguredNetworks.clear();
-        mScanDetailCaches.clear();
         for (Map.Entry<String, WifiConfiguration> entry : configs.entrySet()) {
             final String configKey = entry.getKey();
             final WifiConfiguration config = entry.getValue();
@@ -2963,6 +2991,12 @@ public class WifiConfigManager {
             if (result.capabilities.contains("EAP")) {
                 config.allowedKeyManagement.set(KeyMgmt.WPA_EAP);
                 config.allowedKeyManagement.set(KeyMgmt.IEEE8021X);
+            }
+            if (result.capabilities.contains("FILS-SHA256")) {
+                config.filsKeyMgmts.set(Fils.FILS_SHA256);
+            }
+            if (result.capabilities.contains("FILS-SHA384")) {
+                config.filsKeyMgmts.set(Fils.FILS_SHA384);
             }
 
             if (result.capabilities.contains("WEP")) {

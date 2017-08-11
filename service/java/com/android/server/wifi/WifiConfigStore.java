@@ -283,6 +283,15 @@ public class WifiConfigStore {
             config.getNetworkSelectionStatus().setNetworkSelectionBSSID(null);
         }
 
+        value = mWifiNative.getNetworkVariable(netId, WifiConfiguration.SIMNumVarName);
+        if (!TextUtils.isEmpty(value)) {
+            try {
+                config.SIMNum = Integer.parseInt(value);
+            } catch (NumberFormatException ignore) {
+                Log.e(TAG,"error in parsing Selected Sim number " + config.SIMNum);
+            }
+        }
+
         value = mWifiNative.getNetworkVariable(netId, WifiConfiguration.priorityVarName);
         config.priority = -1;
         if (!TextUtils.isEmpty(value)) {
@@ -343,6 +352,9 @@ public class WifiConfigStore {
                 WifiConfiguration.KeyMgmt.varName, WifiConfiguration.KeyMgmt.strings);
         // The FT flags should not be exposed to external apps.
         config.allowedKeyManagement = removeFastTransitionFlags(config.allowedKeyManagement);
+
+         readNetworkBitsetVariable(config.networkId, config.filsKeyMgmts,
+                WifiConfiguration.KeyMgmt.varName, WifiConfiguration.Fils.filsKeyStrings);
 
         readNetworkBitsetVariable(config.networkId, config.allowedAuthAlgorithms,
                 WifiConfiguration.AuthAlgorithm.varName, WifiConfiguration.AuthAlgorithm.strings);
@@ -652,6 +664,14 @@ public class WifiConfigStore {
         }
         String allowedKeyManagementString =
                 makeString(config.allowedKeyManagement, WifiConfiguration.KeyMgmt.strings);
+        if (config.filsKeyMgmts.get(WifiConfiguration.Fils.FILS_SHA256) ||
+               config.filsKeyMgmts.get(WifiConfiguration.Fils.FILS_SHA384)) {
+            if (!mWifiNative.setNetworkVariable(netId, WifiConfiguration.erpVarName, "1")) {
+                loge("failed to set erp");
+            }
+            allowedKeyManagementString = allowedKeyManagementString + " " +
+                                             makeString(config.filsKeyMgmts, WifiConfiguration.Fils.filsKeyStrings);
+        }
         if (config.allowedKeyManagement.cardinality() != 0 && !mWifiNative.setNetworkVariable(
                 netId,
                 WifiConfiguration.KeyMgmt.varName,
@@ -736,6 +756,13 @@ public class WifiConfigStore {
                 loge("failed to set wep_tx_keyidx: " + config.wepTxKeyIndex);
                 return false;
             }
+        }
+        if (config.SIMNum != 0 && !mWifiNative.setNetworkVariable(
+                netId,
+                WifiConfiguration.SIMNumVarName,
+                Integer.toString(config.SIMNum))) {
+            loge(config.SIMNum + ": failed to set sim no: " + config.SIMNum);
+            return false;
         }
         if (!mWifiNative.setNetworkVariable(
                 netId,
